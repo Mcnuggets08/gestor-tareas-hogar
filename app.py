@@ -36,9 +36,9 @@ if "es_lider" not in st.session_state:
 # --- PANTALLA DE ACCESO / LOGIN ---
 if not st.session_state.codigo_activo:
     st.title("🧹 Gestor de Tareas y Créditos por Hogares")
-    st.markdown("Bienvenido. Puedes **crear un nuevo hogar** (si eres líder) o **unirte a un hogar existente** usando el código de acceso.")
+    st.markdown("Bienvenido a la plataforma en línea. Crea un nuevo hogar o únete con tu código de acceso.")
     
-    tab_crear, tab_unirse = st.tabs(["🏠 Crear Hogar (Líder)", "🔑 Unirse a un Hogar (Miembro / Líder)"])
+    tab_crear, tab_unirse = st.tabs(["🏠 Crear Hogar (Líder)", "🔑 Unirse a un Hogar"])
     
     with tab_crear:
         st.subheader("Crear un Nuevo Hogar")
@@ -49,7 +49,7 @@ if not st.session_state.codigo_activo:
             modo_juego = st.selectbox("Modo de Juego", ["Normal", "Modo Difícil ⏱️"])
             meta_dificil = 0
             if modo_juego == "Modo Difícil ⏱️":
-                st.info("⚠️ **Modo Difícil:** Tendrás una meta de créditos que el hogar debe alcanzar en los primeros 5 días de cada ciclo. Si no se logra, no se podrán pedir permisos. Además, los créditos se reiniciarán a 0 automáticamente cada 7 días.")
+                st.info("⚠️ **Modo Difícil:** Meta de créditos en los primeros 5 días. Si no se logra, se bloquean permisos. Reinicio automático a 0 cada 7 días.")
                 meta_dificil = st.number_input("Meta de créditos a alcanzar en 5 días", min_value=10, max_value=1000, value=50, step=10)
             
             crear_btn = st.form_submit_button("Crear Hogar")
@@ -75,8 +75,7 @@ if not st.session_state.codigo_activo:
                         "meta_cumplida": False
                     }
                     guardar_db(db)
-                    st.success(f"¡Hogar creado con éxito! Tu código de acceso permanente es: **{codigo}**")
-                    st.info("Comparte este código con los miembros de tu hogar. Ya puedes iniciar sesión con él.")
+                    st.success(f"¡Hogar creado con éxito! Código permanente: **{codigo}**")
     
     with tab_unirse:
         st.subheader("Entrar a un Hogar Existente")
@@ -90,12 +89,12 @@ if not st.session_state.codigo_activo:
                 if not codigo_ingresado or not nombre_usuario:
                     st.error("Debes ingresar el código y tu nombre de usuario.")
                 elif codigo_ingresado not in db:
-                    st.error("El código de hogar ingresado no existe o fue eliminado.")
+                    st.error("El código de hogar ingresado no existe.")
                 else:
                     hogar = db[codigo_ingresado]
                     if es_lider_checkbox:
                         if nombre_usuario != hogar["lider"]:
-                            st.error(f"El líder registrado de este hogar es '{hogar['lider']}'. Verifica tu nombre.")
+                            st.error(f"El líder registrado es '{hogar['lider']}'. Verifica tu nombre.")
                         else:
                             st.session_state.codigo_activo = codigo_ingresado
                             st.session_state.usuario_activo = nombre_usuario
@@ -134,14 +133,13 @@ if hogar_data.get("modo_dificil", False):
     fecha_ini = date.fromisoformat(hogar_data["fecha_inicio"])
     dias_totales = (hoy - fecha_ini).days
     ciclo_actual = dias_totales // 7
-    dias_en_ciclo = dias_totales % 7 # 0 a 6 (Días 0,1,2,3,4 = primeros 5 días)
+    dias_en_ciclo = dias_totales % 7 
     
     if "ciclo_actual" not in hogar_data:
         hogar_data["ciclo_actual"] = 0
         hogar_data["meta_cumplida"] = False
         guardar_db(db)
         
-    # Si pasaron 7 días, reiniciamos créditos a 0 y avanzamos ciclo
     if ciclo_actual > hogar_data["ciclo_actual"]:
         for m in hogar_data["credits"]:
             hogar_data["credits"][m] = 0
@@ -149,33 +147,36 @@ if hogar_data.get("modo_dificil", False):
         hogar_data["meta_cumplida"] = False
         guardar_db(db)
         
-    # Evaluar si en los primeros 5 días se cumplió la meta de créditos sumados
     suma_creditos = sum(hogar_data["credits"].values())
     if dias_en_ciclo < 5:
         if suma_creditos >= hogar_data["meta_dificil"]:
             hogar_data["meta_cumplida"] = True
             guardar_db(db)
     else:
-        # Si ya pasaron los primeros 5 días y no se cumplió la meta, bloquear permisos
         if not hogar_data.get("meta_cumplida", False):
             permisos_bloqueados_por_dificil = True
 
-# Barra lateral
+# --- BARRA LATERAL ---
 st.sidebar.title(f"🏠 {hogar_data['nombre']}")
-st.sidebar.markdown(f"**Código de acceso:** `{codigo_actual}`")
+st.sidebar.markdown(f"**Código:** `{codigo_actual}`")
+
+# Botón de Refrescar / Actualizar datos en tiempo real
+if st.sidebar.button("🔄 Refrescar Datos"):
+    st.rerun()
+
 if hogar_data.get("modo_dificil", False):
-    st.sidebar.error("🔥 **MODO DIFÍCIL ACTIVO**")
+    st.sidebar.error("🔥 **MODO DIFÍCIL**")
     st.sidebar.write(f"Meta 5 días: **{hogar_data['meta_dificil']} 🪙**")
-    st.sidebar.write(f"Día del ciclo (7 días): **{(dias_totales % 7) + 1}/7**")
+    st.sidebar.write(f"Día ciclo: **{(dias_totales % 7) + 1}/7**")
     if hogar_data.get("meta_cumplida", False):
-        st.sidebar.success("✅ ¡Meta de 5 días cumplida!")
+        st.sidebar.success("✅ ¡Meta cumplida!")
     else:
         if dias_en_ciclo < 5:
-            st.sidebar.warning(f"⏳ Faltan {5 - dias_en_ciclo} días para cumplir la meta.")
+            st.sidebar.warning(f"⏳ Quedan {5 - dias_en_ciclo} días.")
         else:
-            st.sidebar.error("❌ Meta no cumplida: Permisos bloqueados.")
+            st.sidebar.error("❌ Permisos bloqueados.")
 
-st.sidebar.markdown(f"👤 **Usuario:** {usuario_actual} ({'Líder 👑' if es_lider else 'Miembro'})")
+st.sidebar.markdown(f"👤 **{usuario_actual}** ({'Líder 👑' if es_lider else 'Miembro'})")
 
 if st.sidebar.button("🚪 Salir del Hogar"):
     st.session_state.codigo_activo = None
@@ -184,10 +185,9 @@ if st.sidebar.button("🚪 Salir del Hogar"):
     st.rerun()
 
 if es_lider:
-    if st.sidebar.button("🗑️ Eliminar Hogar (Permanente)", type="primary"):
+    if st.sidebar.button("🗑️ Eliminar Hogar", type="primary"):
         del db[codigo_actual]
         guardar_db(db)
-        st.sidebar.success("Hogar eliminado.")
         st.session_state.codigo_activo = None
         st.session_state.usuario_activo = None
         st.session_state.es_lider = False
@@ -214,11 +214,11 @@ if rol_actual == "Líder":
         if not miembros_disponibles:
             st.warning("Aún no hay miembros unidos a este hogar.")
         else:
-            with st.form("form_tarea"):
+            with st.form("form_tarea", clear_on_submit=True):
                 titulo_tarea = st.text_input("Descripción de la tarea (ej. Limpiar cocina)")
                 asignado = st.selectbox("Asignar a:", miembros_disponibles)
-                recompensa = st.number_input("Créditos de recompensa / multa", min_value=5, max_value=100, value=10, step=5)
-                submitted = st.form_submit_button("Crear Tarea")
+                recompensa = st.number_input("Créditos de recompensa", min_value=5, max_value=100, value=10, step=5)
+                submitted = st.form_submit_button("Crear y Asignar Tarea")
                 
                 if submitted and titulo_tarea:
                     nueva_id = len(hogar_data["tasks"]) + 1
@@ -231,60 +231,58 @@ if rol_actual == "Líder":
                         "image": None
                     })
                     guardar_db(db)
-                    st.success(f"¡Tarea creada y asignada a {asignado}!")
-                    st.rerun()
+                    st.success(f"✅ ¡Tarea creada con éxito y asignada a **{asignado}** ({recompensa} créditos)! Los datos se han guardado para evitar acumulación.")
 
     with tab2:
-        st.subheader("Revisar Tareas Completadas (Evidencia Fotográfica)")
+        st.subheader("Revisar Tareas Completadas (Evidencia)")
         pendientes_revision = [t for t in hogar_data["tasks"] if t["status"] == "En Revisión"]
         
         if not pendientes_revision:
-            st.info("No hay tareas pendientes de revisión en este momento.")
+            st.info("No hay tareas pendientes de revisión.")
         else:
             for tarea in pendientes_revision:
                 with st.expander(f"Tarea: {tarea['title']} (Asignado a: {tarea['assigned_to']})"):
                     st.write(f"Recompensa: **{tarea['reward']} créditos**")
-                    
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button(f"✅ Aprobar (ID {tarea['id']})", key=f"aprob_{tarea['id']}"):
                             tarea["status"] = "Completada"
                             hogar_data["credits"][tarea["assigned_to"]] += tarea["reward"]
                             guardar_db(db)
-                            st.success(f"¡Tarea aprobada! Se sumaron {tarea['reward']} créditos a {tarea['assigned_to']}.")
+                            st.success(f"¡Aprobado! +{tarea['reward']} créditos a {tarea['assigned_to']}.")
                             st.rerun()
                     with col2:
                         if st.button(f"❌ Rechazar (ID {tarea['id']})", key=f"rech_{tarea['id']}"):
                             tarea["status"] = "Rechazada"
                             hogar_data["credits"][tarea["assigned_to"]] = max(0, hogar_data["credits"][tarea["assigned_to"]] - int(tarea["reward"]/2))
                             guardar_db(db)
-                            st.warning("Tarea rechazada. Se aplicó penalización de créditos.")
+                            st.warning("Tarea rechazada con penalización.")
                             st.rerun()
 
     with tab3:
-        st.subheader("Solicitudes de Permisos de los Miembros")
+        st.subheader("Solicitudes de Permisos")
         if permisos_bloqueados_por_dificil:
-            st.error("🚫 **Permisos bloqueados:** En Modo Difícil no se alcanzó la meta de créditos en los primeros 5 días de este ciclo. No se pueden aprobar permisos hasta el próximo reinicio semanal.")
+            st.error("🚫 Permisos bloqueados por el Modo Difícil.")
         else:
             if not hogar_data["permits"]:
-                st.info("No hay solicitudes de permisos pendientes.")
+                st.info("No hay solicitudes pendientes.")
             else:
                 for idx, p in enumerate(hogar_data["permits"]):
                     if p["status"] == "Pendiente":
-                        st.write(f"👤 **{p['member']}** solicita permiso para el **{p['date']}** por un costo de **{p['cost']} créditos**.")
+                        st.write(f"👤 **{p['member']}** solicita permiso para el **{p['date']}** ({p['cost']} créditos).")
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button("Aprobar Permiso", key=f"perm_aprob_{idx}"):
                                 p["status"] = "Aprobado"
                                 guardar_db(db)
-                                st.success("¡Permiso aprobado con éxito!")
+                                st.success("¡Permiso aprobado!")
                                 st.rerun()
                         with col2:
                             if st.button("Rechazar Permiso", key=f"perm_rech_{idx}"):
                                 p["status"] = "Rechazada"
                                 hogar_data["credits"][p["member"]] += p["cost"]
                                 guardar_db(db)
-                                st.info("Permiso rechazado. Se devolvieron los créditos al miembro.")
+                                st.info("Permiso rechazado y créditos devueltos.")
                                 st.rerun()
 
 # --- VISTA DE MIEMBRO ---
@@ -306,30 +304,31 @@ else:
                 st.write(f"Recompensa: {tarea['reward']} 🪙 | Estado: **{tarea['status']}**")
                 
                 if tarea["status"] in ["Pendiente", "Rechazada"]:
-                    foto_subida = st.file_uploader(f"Sube foto de evidencia para la tarea {tarea['id']}", type=["jpg", "png", "jpeg"], key=f"file_{tarea['id']}")
+                    foto_subida = st.file_uploader(f"Sube foto de evidencia para tarea {tarea['id']}", type=["jpg", "png", "jpeg"], key=f"file_{tarea['id']}")
                     if foto_subida:
                         img = Image.open(foto_subida)
-                        st.image(img, caption="Vista previa de tu evidencia", width=200)
+                        st.image(img, caption="Vista previa", width=200)
                         if st.button(f"Enviar Evidencia (Tarea {tarea['id']})", key=f"enviar_{tarea['id']}"):
+                            tarea["image"] = None  # Evitamos guardar objetos imagen pesados en JSON
                             tarea["status"] = "En Revisión"
                             guardar_db(db)
-                            st.success("¡Evidencia enviada al líder para su revisión!")
+                            st.success("¡Evidencia enviada al líder!")
                             st.rerun()
                 elif tarea["status"] == "En Revisión":
-                    st.info("⏳ Tu evidencia está siendo evaluada por el líder.")
+                    st.info("⏳ En revisión por el líder.")
                 elif tarea["status"] == "Completada":
-                    st.success("🎉 ¡Tarea completada y aprobada!")
+                    st.success("🎉 ¡Completada!")
 
     with tab_calendario:
-        st.subheader("🗓️ Solicitar Permisos usando Créditos")
+        st.subheader("🗓️ Solicitar Permisos")
         st.write(f"Tus créditos disponibles: **{hogar_data['credits'][usuario_actual]} 🪙**")
         
         if permisos_bloqueados_por_dificil:
-            st.error("🚫 **Permisos bloqueados en Modo Difícil:** El hogar no alcanzó la meta de créditos establecida en los primeros 5 días de este ciclo. No es posible solicitar nuevos permisos hasta el próximo reinicio de créditos.")
+            st.error("🚫 Permisos bloqueados temporalmente por el Modo Difícil.")
         else:
             with st.form("form_permiso"):
                 fecha_tentativa = st.date_input("Fecha deseada", min_value=date.today())
-                costo_creditos = st.number_input("Créditos a ofertar por el permiso", min_value=5, max_value=100, value=20, step=5)
+                costo_creditos = st.number_input("Créditos a ofertar", min_value=5, max_value=100, value=20, step=5)
                 enviar_permiso = st.form_submit_button("Solicitar Permiso")
                 
                 if enviar_permiso:
@@ -342,15 +341,15 @@ else:
                             "status": "Pendiente"
                         })
                         guardar_db(db)
-                        st.success("¡Solicitud enviada al líder! Se han descontado los créditos temporalmente.")
+                        st.success("¡Solicitud enviada!")
                         st.rerun()
                     else:
-                        st.error("No tienes suficientes créditos para solicitar este permiso.")
+                        st.error("No tienes suficientes créditos.")
         
-        st.markdown("### Historial de tus Permisos")
+        st.markdown("### Historial de Permisos")
         mis_permisos = [p for p in hogar_data["permits"] if p["member"] == usuario_actual]
         if not mis_permisos:
-            st.info("No has solicitado permisos aún.")
+            st.info("No has solicitado permisos.")
         else:
             for p in mis_permisos:
-                st.write(f"- Fecha: **{p['date']}** | Costo: **{p['cost']} créditos** | Estado: **{p['status']}**")
+                st.write(f"- Fecha: **{p['date']}** | Costo: **{p['cost']}** | Estado: **{p['status']}**")
